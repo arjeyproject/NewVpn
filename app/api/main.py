@@ -47,6 +47,8 @@ async def handle_sub(request: web.Request) -> web.Response:
         body, meta = await render_subscription_body(session, sub)
         profile = await session.get(VpnProfile, sub.profile_id)
         display_name = profile.name if profile else "NewVpn"
+        # persist access stats / expiry flips done during rendering
+        await session.commit()
     resp = web.Response(text=body)
     resp.headers["Content-Type"] = "text/plain; charset=utf-8"
     resp.headers["subscription-userinfo"] = f"upload=0; download=0; total=0; expire={meta['expire']}"
