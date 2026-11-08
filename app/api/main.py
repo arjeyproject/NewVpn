@@ -102,3 +102,7 @@ def build_app() -> web.Application:
 def run() -> None:
     s = get_settings()
     web.run_app(build_app(), host=s.sub_api_host, port=s.sub_api_port, print=None)
+
+
+if __name__ == "__main__":
+    run()
