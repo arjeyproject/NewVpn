@@ -42,6 +42,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-newvpn}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-newvpn}
+    volumes:
+      - xrayconfig:/etc/newvpn/xray
     ports:
       - "${SUB_API_PORT:-8899}:${SUB_API_PORT:-8899}"
     command: ["python", "-m", "app.api.main"]
