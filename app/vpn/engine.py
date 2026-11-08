@@ -86,6 +86,24 @@ async def _clean_ips(session: AsyncSession, limit: int) -> list[IpInventory]:
     return list(rows.scalars())
 
 
+async def _wait_xray_ready(attempts: int = 24, delay: float = 0.5) -> None:
+    """Poll the REALITY port on the xray container until it accepts connections
+    (the supervisor restart takes up to a few seconds)."""
+    s = get_settings()
+    for _ in range(attempts):
+        try:
+            _, w = await asyncio.open_connection(s.xray_validation_host, s.xray_reality_port)
+            w.close()
+            try:
+                await w.wait_closed()
+            except Exception:
+                pass
+            return
+        except Exception:
+            await asyncio.sleep(delay)
+    log.warning("xray port %s never became ready before validation", s.xray_reality_port)
+
+
 async def provision_profile(
     session: AsyncSession,
     user: User,
@@ -149,15 +167,20 @@ async def provision_profile(
 
     # ---- Phase B: write xray config INCLUDING new clients, reload, wait ----
     await _rebuild_xray(session, state)
-    await asyncio.sleep(3.0)  # give the supervisor time to (re)bind ports
+    await _wait_xray_ready()
 
     # ---- Phase C: live validation of every candidate ----
+    # NOTE: the server's own public IP is hairpin-NAT-blocked at many providers
+    # (self-connect refused), so validation targets the xray container directly
+    # over the compose network. SNI/path/host headers stay as configured, which
+    # keeps the transport-level check honest (TLS handshake / WS upgrade).
     sem = asyncio.Semaphore(8)
+    vh = get_settings().xray_validation_host
 
     async def _check(spec: dict):
         async with sem:
             return await validation.validate_endpoint(
-                spec["address"], spec["port"], spec["transport"], sni=spec.get("sni"),
+                vh, spec["port"], spec["transport"], sni=spec.get("sni"),
                 path=spec.get("path"), host_header=spec.get("host_header"),
             )
 

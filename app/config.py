@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # --- Server / VPN backend ---
     server_public_ip: str = ""  # auto-detected if empty
     xray_config_dir: str = "/etc/newvpn/xray"
+    xray_validation_host: str = "xray"  # compose-internal DNS name of the xray container
     xray_reality_port: int = 443
     xray_ws_port: int = 8080
     xray_trojan_port: int = 8443
