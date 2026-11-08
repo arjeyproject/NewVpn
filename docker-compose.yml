@@ -1,0 +1,103 @@
+# NewVpn production stack
+name: newvpn
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-newvpn}
+      POSTGRES_USER: ${POSTGRES_USER:-newvpn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-newvpn} -d ${POSTGRES_DB:-newvpn}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [newvpn]
+
+  bot:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-newvpn}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-newvpn}
+    volumes:
+      - xrayconfig:/etc/newvpn/xray
+      - backups:/app/backups
+    command: ["python", "-m", "app.bot.main"]
+    networks: [newvpn]
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-newvpn}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-newvpn}
+    ports:
+      - "${SUB_API_PORT:-8080}:8080"
+    command: ["python", "-m", "app.api.main"]
+    networks: [newvpn]
+
+  worker:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-newvpn}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-newvpn}
+    volumes:
+      - xrayconfig:/etc/newvpn/xray
+      - backups:/app/backups
+    command: ["python", "-m", "app.worker.main"]
+    networks: [newvpn]
+
+  migrate:
+    build: .
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-newvpn}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-newvpn}
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    networks: [newvpn]
+
+  xray:
+    image: debian:bookworm-slim
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/scripts/xray_supervisor.sh"]
+    volumes:
+      - xrayconfig:/etc/newvpn/xray
+      - ./scripts:/scripts:ro
+      - /opt/newvpn/xray/xray:/usr/local/bin/xray:ro
+    ports:
+      - "${XRAY_REALITY_PORT:-443}:443"
+      - "${XRAY_WS_PORT:-8080}:8080"
+      - "${XRAY_TROJAN_PORT:-8443}:8443"
+      - "${XRAY_TROJAN_PORT:-8443}1:8444"
+      - "${XRAY_CHAIN_PORT_BASE:-20000}-${XRAY_CHAIN_PORT_END:-20050}:${XRAY_CHAIN_PORT_BASE:-20000}-${XRAY_CHAIN_PORT_END:-20050}"
+    networks: [newvpn]
+
+volumes:
+  pgdata:
+  xrayconfig:
+  backups:
+
+networks:
+  newvpn:
+    driver: bridge
