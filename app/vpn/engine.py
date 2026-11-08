@@ -12,7 +12,9 @@ validation are NOT delivered — the actual healthy count is reported.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
+import time as _time
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -84,6 +86,26 @@ async def _clean_ips(session: AsyncSession, limit: int) -> list[IpInventory]:
         .limit(limit)
     )
     return list(rows.scalars())
+
+
+async def _wait_xray_applied(state: XrayState, timeout: float = 20.0) -> None:
+    """Wait until the xray supervisor confirms it restarted on OUR config version.
+
+    The supervisor writes the sha256 of config.json into .applied once the new
+    xray process has been alive for >2s. Without this handshake, validation can
+    race the restart and probe a process still running the previous config.
+    """
+    want = hashlib.sha256(state.config_path.read_bytes()).hexdigest()
+    applied = state.dir / ".applied"
+    deadline = _time.monotonic() + timeout
+    while _time.monotonic() < deadline:
+        try:
+            if applied.exists() and applied.read_text().strip() == want:
+                return
+        except Exception:
+            pass
+        await asyncio.sleep(0.5)
+    log.warning("xray supervisor did not confirm applied config within %.0fs", timeout)
 
 
 async def _wait_xray_ready(attempts: int = 24, delay: float = 0.5) -> None:
@@ -167,6 +189,7 @@ async def provision_profile(
 
     # ---- Phase B: write xray config INCLUDING new clients, reload, wait ----
     await _rebuild_xray(session, state)
+    await _wait_xray_applied(state)
     await _wait_xray_ready()
 
     # ---- Phase C: live validation of every candidate ----

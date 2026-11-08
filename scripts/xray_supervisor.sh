@@ -23,6 +23,14 @@ start_xray() {
   "$BIN" run -c "$CONFIG" 2>&1 &
   xpid=$!
   echo "[xray-supervisor] starting xray pid=$xpid"
+  # confirm the applied config version once the process proves stable
+  (
+    sleep 2
+    if kill -0 "$xpid" 2>/dev/null; then
+      sha256sum "$CONFIG" 2>/dev/null | cut -d' ' -f1 > "$CFG_DIR/.applied.tmp"
+      mv "$CFG_DIR/.applied.tmp" "$CFG_DIR/.applied"
+    fi
+  ) &
 }
 
 stop_xray() {
