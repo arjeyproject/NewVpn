@@ -23,7 +23,7 @@ from app.db.models import utcnow, CloudflareAccount, CloudflareZone, Domain, IpI
 from app.security import crypto
 from app.subscriptions.service import create_subscription
 from app.vpn import links, validation, xray
-from app.vpn.xray import XrayState
+from app.vpn.xray import REALITY_DEFAULT_FINGERPRINT, XrayState
 
 log = logging.getLogger("newvpn.provisioning")
 
