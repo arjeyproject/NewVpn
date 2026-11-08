@@ -216,7 +216,10 @@ async def provision_profile(
 
     # Persist ids into provisioned configs & subscription
     sub = await create_subscription(session, profile)
-    for pc, cfg in zip(provisioned, profile.configs[:len(provisioned)]):
+    saved = (await session.execute(
+        select(VpnConfig).where(VpnConfig.profile_id == profile.id).order_by(VpnConfig.id)
+    )).scalars().all()
+    for pc, cfg in zip(provisioned, saved[:len(provisioned)]):
         pc.db_id = cfg.id
 
     return ProvisionResult(
