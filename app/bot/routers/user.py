@@ -16,7 +16,7 @@ from app.bot.helpers import (ensure_user, get_user, guard_user,
 from app.bot.i18n import t
 from app.config import get_settings
 from app.db.engine import SessionFactory
-from app.db.models import (IpInventory, Subscription, VpnConfig, VpnProfile)
+from app.db.models import (IpInventory, Subscription, User, VpnConfig, VpnProfile)
 from app.subscriptions import service as subsrv
 from app.vpn import validation
 from app.vpn.engine import provision_profile
@@ -43,7 +43,8 @@ async def cmd_start(message: Message, state: FSMContext):
         await message.answer(t(lang_of(user), "suspended"))
         return
     await log_activity(user.id, "start")
-    await message.answer(t(lang_of(user), "welcome"))
+    await message.answer(t(lang_of(user), "welcome",
+                           channel=get_settings().channel_handle))
     await message.answer(t(lang_of(user), "your_id", uid=user.id))
     await message.answer(t(lang_of(user), "main_menu_title"),
                          reply_markup=kb.main_menu(lang_of(user), is_admin=bool(user.is_admin)))
@@ -139,10 +140,16 @@ async def fsm_profile_name(message: Message, state: FSMContext):
         else t(lang, "create_partial", count=result.count, wanted=s.configs_per_profile,
                skipped="\n".join("• " + x for x in result.skipped[:4]))
     text += "\n\n" + t(lang, "sub_url", url=result.subscription_url)
+    text += "\n\n" + t(lang, "config_links_title")
     await progress.edit_text(text)
-    # send each config link
+    # send each config link with its real measured ping
     for c in result.configs:
-        await message.answer(f"<code>{c.link}</code>")
+        line = t(lang, "config_line",
+                 name=c.name,
+                 proto=f"{c.protocol.upper()}+{c.transport}",
+                 status="🟢" if (c.latency_ms or 999) < 400 else "🟡",
+                 ping=f"{c.latency_ms}ms" if c.latency_ms is not None else "—")
+        await message.answer(f"{line}\n<code>{c.link}</code>")
     await log_activity(user.id, "provision", {"profile_id": result.profile_id, "count": result.count})
 
 

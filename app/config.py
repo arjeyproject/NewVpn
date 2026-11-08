@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     bot_token: str = ""  # from @BotFather
     admin_telegram_ids: str = ""  # comma separated numeric IDs
     default_language: str = "fa"
+    bot_display_name: str = "AutoVless"  # branding shown in texts & Telegram profile
+    support_handle: str = "@irezafattahi"  # support contact (without https:// prefix)
+    channel_handle: str = "@AutoVless"  # official channel
 
     # --- Security ---
     encryption_key: str = ""  # Fernet key (openssl rand -base64 32) — encrypts CF tokens & proxy creds

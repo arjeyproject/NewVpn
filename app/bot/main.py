@@ -44,6 +44,22 @@ async def run() -> None:
     dp.include_router(admin.router)
 
     logging.getLogger("newvpn.bot").info("NewVpn bot starting…")
+    # Telegram profile branding (best effort)
+    from aiogram.types import BotCommand, BotCommandScopeDefault
+    try:
+        await bot.set_my_name(s.bot_display_name, language_code=None)
+        await bot.set_my_description(
+            "ساخت خودکار کانفیگ VLESS/Trojan با تست پینگ واقعی — کانال: "
+            + s.channel_handle, language_code=None)
+        await bot.set_my_short_description(
+            "AutoVless — automatic VLESS/Trojan configs with real ping tests", language_code=None)
+        await bot.set_my_commands([
+            BotCommand(command="start", description="شروع / منوی اصلی"),
+            BotCommand(command="menu", description="منوی اصلی"),
+            BotCommand(command="cancel", description="لغو عملیات"),
+        ], scope=BotCommandScopeDefault())
+    except Exception:
+        logging.getLogger("newvpn.bot").warning("branding/commands setup skipped", exc_info=True)
     await bot.delete_webhook(drop_pending_updates=True)
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())

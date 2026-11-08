@@ -33,7 +33,8 @@ async def cb_support(cb: CallbackQuery):
         await cb.answer()
         return
     lang = lang_of(user)
-    await cb.message.edit_text(t(lang, "support_title"), reply_markup=kb.support_menu(lang))
+    await cb.message.edit_text(t(lang, "support_title", handle=get_settings().support_handle),
+                               reply_markup=kb.support_menu(lang))
     await cb.answer()
 
 

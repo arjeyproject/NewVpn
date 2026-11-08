@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 FA = {
-    "welcome": "👋 <b>خوش آمدید به نیو وی‌پی‌ان!</b>\n\nپنل مدیریت VPN روی تلگرام، سریع و امن.",
-    "your_id": "🆔 ایدی عددی شما: <code>{uid}</code>\n(برای تنظیم ادمین، این عدد در env ثبت می‌شود)",
-    "main_menu_title": "🖥 <b>منوی اصلی نیو وی‌پی‌ان</b>",
+    "welcome": "👋 <b>خوش آمدید به AutoVless!</b>\n\nساخت خودکار کانفیگ VLESS/Trojan با تست پینگ واقعی.\n📣 کانال رسمی: {channel}",
+    "your_id": "🆔 ایدی عددی شما: <code>{uid}</code>",
+    "main_menu_title": "🖥 <b>منوی اصلی AutoVless</b>",
     "language_set": "✅ زبان روی {lang} تنظیم شد.",
     "menu_create": "🟢 ساخت VPN",
     "menu_my_configs": "🔵 کانفیگ‌های من",
@@ -30,6 +30,8 @@ FA = {
     "create_profile_name": "📝 یک اسم برای پروفایل بفرستید\n(مثلاً: گوشی من)",
     "create_generating": "⏳ در حال آماده‌سازی...\n\n⏳ اتصال به زیرساخت VPN...\n⏳ بررسی کیفیت IPها...\n⏳ اعتبارسنجی کانفیگ‌ها...",
     "create_done": "✅ <b>{count} کانفیگ سالم تولید شد</b>\n\n🎉 اشتراک با موفقیت ساخته شد!",
+    "config_line": "<b>{name}</b> · {proto} · {status} پینگ: <b>{ping}</b>",
+    "config_links_title": "📋 لینک کانفیگ‌ها:",
     "create_partial": "⚠️ <b>{count} کانفیگ سالم تولید شد</b>\n\nبرای رسیدن به {wanted} کانفیگ کامل، دامنه Cloudflare متصل کنید یا IP Pool سالم‌تری لازم است.\n\nدلایل رد شدن:\n{skipped}",
     "create_failed": "❌ هیچ endpoint سالمی در دسترس نبود. چند لحظه بعد دوباره تلاش کنید.",
     "sub_url": "🔗 آدرس اشتراک:\n<code>{url}</code>\n\nاین آدرس را در کلاینت (v2rayNG / Nekobox / Streisand) اضافه کنید.",
@@ -64,7 +66,7 @@ FA = {
     "cf_deleted": "✅ اکانت قطع شد و توکن حذف شد.",
     "account_title": "👤 <b>حساب من</b>\n\nایدی: <code>{uid}</code>\nزبان: {lang}\nوضعیت: {status}\nکانفیگ‌های فعال: {configs}\nاشتراک فعال: {subs}\nعضویت از: {since}",
     "tutorials_title": "📚 <b>مرکز آموزش</b>\nموضوع را انتخاب کنید:",
-    "support_title": "💬 <b>پشتیبانی</b>",
+    "support_title": "💬 <b>پشتیبانی AutoVless</b>\n\n☎️ ارتباط مستقیم: {handle}",
     "support_new_ticket": "🎫 ساخت تیکت",
     "support_my_tickets": "📂 تیکت‌های من",
     "support_faq": "❓ سوالات متداول",
@@ -102,9 +104,9 @@ FA = {
 }
 
 EN = {
-    "welcome": "👋 <b>Welcome to NewVpn!</b>\n\nYour premium VPN control panel on Telegram.",
-    "your_id": "🆔 Your numeric ID: <code>{uid}</code>\n(set this in env to grant admin)",
-    "main_menu_title": "🖥 <b>NewVpn — Main Menu</b>",
+    "welcome": "👋 <b>Welcome to AutoVless!</b>\n\nAutomatic VLESS/Trojan config generation with real ping tests.\n📣 Official channel: {channel}",
+    "your_id": "🆔 Your numeric ID: <code>{uid}</code>",
+    "main_menu_title": "🖥 <b>AutoVless — Main Menu</b>",
     "language_set": "✅ Language set to {lang}.",
     "menu_create": "🟢 Create VPN Panel",
     "menu_my_configs": "🔵 My Configurations",
@@ -130,6 +132,8 @@ EN = {
     "create_profile_name": "📝 Send a name for your profile\n(e.g.: my phone)",
     "create_generating": "⏳ Preparing...\n\n⏳ Connecting to VPN backend...\n⏳ Checking IP quality...\n⏳ Validating configurations...",
     "create_done": "✅ <b>{count} healthy configurations generated</b>\n\n🎉 Subscription successfully created!",
+    "config_line": "<b>{name}</b> · {proto} · {status} ping: <b>{ping}</b>",
+    "config_links_title": "📋 Config links:",
     "create_partial": "⚠️ <b>{count} healthy configurations generated</b>\n\nTo reach the full {wanted}, connect a Cloudflare domain or improve the IP pool.\n\nRejected endpoints:\n{skipped}",
     "create_failed": "❌ No healthy endpoint available right now. Please try again shortly.",
     "sub_url": "🔗 Subscription URL:\n<code>{url}</code>\n\nAdd it to your client (v2rayNG / Nekobox / Streisand).",
@@ -164,7 +168,7 @@ EN = {
     "cf_deleted": "✅ Account disconnected and token removed.",
     "account_title": "👤 <b>My Account</b>\n\nID: <code>{uid}</code>\nLanguage: {lang}\nStatus: {status}\nActive configs: {configs}\nActive subs: {subs}\nMember since: {since}",
     "tutorials_title": "📚 <b>Tutorials</b>\nPick a topic:",
-    "support_title": "💬 <b>Support</b>",
+    "support_title": "💬 <b>AutoVless Support</b>\n\n☎️ Direct contact: {handle}",
     "support_new_ticket": "🎫 New ticket",
     "support_my_tickets": "📂 My tickets",
     "support_faq": "❓ FAQ",
