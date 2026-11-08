@@ -43,7 +43,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-newvpn}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-newvpn}
     ports:
-      - "${SUB_API_PORT:-8899}:8080"
+      - "${SUB_API_PORT:-8899}:${SUB_API_PORT:-8899}"
     command: ["python", "-m", "app.api.main"]
     networks: [newvpn]
 
