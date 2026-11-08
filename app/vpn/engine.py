@@ -156,7 +156,7 @@ async def provision_profile(
 
     async def _check(spec: dict):
         async with sem:
-            return spec, await validation.validate_endpoint(
+            return await validation.validate_endpoint(
                 spec["address"], spec["port"], spec["transport"], sni=spec.get("sni"),
                 path=spec.get("path"), host_header=spec.get("host_header"),
             )
