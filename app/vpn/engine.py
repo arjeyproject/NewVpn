@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.db.models import CloudflareAccount, CloudflareZone, Domain, IpInventory, VpnConfig, VpnProfile, Subscription, User
+from app.db.models import utcnow, CloudflareAccount, CloudflareZone, Domain, IpInventory, VpnConfig, VpnProfile, Subscription, User
 from app.security import crypto
 from app.subscriptions.service import create_subscription
 from app.vpn import links, validation, xray
@@ -118,21 +118,6 @@ async def provision_profile(
                 "security": "tls", "tag": "in-ws", "proxied": True,
             })
 
-    # Run live validation concurrently (bounded)
-    sem = asyncio.Semaphore(8)
-
-    async def _check(spec: dict):
-        async with sem:
-            return spec, await validation.validate_endpoint(
-                spec["address"], spec["port"], spec["transport"], sni=spec.get("sni"),
-                path=spec.get("path"), host_header=spec.get("host_header"),
-            )
-
-    results = await asyncio.gather(*[_check(c) for c in candidates])
-    healthy = [(spec, res) for spec, res in results if res.ok]
-    skipped = [f"{c['protocol']}+{c['transport']} {c['address']}:{c['port']} — {res.detail}"
-               for c, res in results if not res.ok]
-
     profile = VpnProfile(
         user_id=user.id, name=profile_name, protocol=protocol,
         domain_id=domain.id if domain else None,
@@ -141,10 +126,9 @@ async def provision_profile(
     session.add(profile)
     await session.flush()
 
-    provisioned: list[ProvisionedConfig] = []
-    reality_clients, ws_clients, trojan_tcp, trojan_ws = [], [], [], []
-
-    for i, (spec, res) in enumerate(healthy):
+    # ---- Phase A: create tentative configs for every candidate ----
+    tentative: list[tuple[dict, VpnConfig]] = []
+    for i, spec in enumerate(candidates):
         cred = crypto.generate_uuid() if spec["protocol"] == "vless" else crypto.generate_trojan_password()
         email_tag = f"p{profile.id}-{spec['tag']}-{i}"
         cfg = VpnConfig(
@@ -157,28 +141,58 @@ async def provision_profile(
             name=f"{profile_name} #{i + 1}",
             proxied_via_cf=bool(spec.get("proxied")),
         )
-        session.add(cfg)
-        client_entry = {"id": cred, "email": email_tag}
         if spec["tag"] == "in-reality":
             cfg.flow = "xtls-rprx-vision"
-            client_entry["flow"] = cfg.flow
-            reality_clients.append(client_entry)
-        elif spec["tag"] == "in-ws":
-            ws_clients.append(client_entry)
-        elif spec["tag"] == "in-trojan-tls":
-            trojan_tcp.append({"password": cred, "email": email_tag})
-        elif spec["tag"] == "in-trojan-ws":
-            trojan_ws.append({"password": cred, "email": email_tag})
+        session.add(cfg)
+        tentative.append((spec, cfg))
+    await session.flush()
 
+    # ---- Phase B: write xray config INCLUDING new clients, reload, wait ----
+    await _rebuild_xray(session, state)
+    await asyncio.sleep(3.0)  # give the supervisor time to (re)bind ports
+
+    # ---- Phase C: live validation of every candidate ----
+    sem = asyncio.Semaphore(8)
+
+    async def _check(spec: dict):
+        async with sem:
+            return spec, await validation.validate_endpoint(
+                spec["address"], spec["port"], spec["transport"], sni=spec.get("sni"),
+                path=spec.get("path"), host_header=spec.get("host_header"),
+            )
+
+    results = await asyncio.gather(*[_check(c[0]) for c in tentative])
+    checked = list(zip(tentative, results))
+
+    provisioned: list[ProvisionedConfig] = []
+    skipped: list[str] = []
+    for (spec, cfg), res in checked:
+        cfg.last_check_at = utcnow()
+        if res.ok:
+            cfg.status = "active"
+            cfg.last_check_status = "ok"
+            cfg.last_latency_ms = res.latency_ms
+        else:
+            cfg.status = "unhealthy"
+            cfg.last_check_status = "fail"
+            skipped.append(f"{spec['protocol']}+{spec['transport']} {spec['address']}:{spec['port']} — {res.detail}")
+    await session.flush()
+
+    # ---- Phase D: rebuild xray with healthy clients only ----
+    await _rebuild_xray(session, state)
+
+    # ---- Phase E: links + subscription for healthy configs ----
+    for (spec, cfg), res in checked:
+        if cfg.status != "active":
+            continue
         params = links.ConfigParams(
-            protocol=spec["protocol"], address=spec["address"], port=spec["port"], credential=cred,
+            protocol=spec["protocol"], address=spec["address"], port=spec["port"], credential=cfg.credential,
             transport="ws" if "ws" in spec["transport"] else ("grpc" if spec["transport"] == "grpc" else "tcp"),
             security=spec.get("security", "none"), sni=spec.get("sni"),
             host_header=spec.get("host_header"), path=spec.get("path"),
             flow=cfg.flow, fingerprint=REALITY_DEFAULT_FINGERPRINT,
             allow_insecure=bool(spec.get("insecure")), name=cfg.name,
         )
-        # reality public key required for client links
         if spec["transport"] == "reality":
             meta = state.ensure_reality_keys()
             params.public_key = meta["public_key"]
@@ -186,41 +200,13 @@ async def provision_profile(
             params.flow = "xtls-rprx-vision"
             params.transport = "tcp"
         provisioned.append(ProvisionedConfig(
-            db_id=0, name=cfg.name, link=links.build_link(params),
+            db_id=cfg.id, name=cfg.name, link=links.build_link(params),
             protocol=spec["protocol"], transport=spec["transport"],
             address=spec["address"], port=spec["port"],
             check_class=res.check_class, latency_ms=res.latency_ms, detail=res.detail,
         ))
 
-    await session.flush()
-
-    # Rebuild xray config with all active clients, then reload
-    all_cfgs = (await session.execute(
-        select(VpnConfig).where(VpnConfig.status == "active")
-    )).scalars().all()
-    rc, wc, tt, tw = [], [], [], []
-    for c in all_cfgs:
-        entry = {"id": c.credential, "email": c.internal_tag or f"c{c.id}"} if c.protocol == "vless" \
-            else {"password": c.credential, "email": c.internal_tag or f"c{c.id}"}
-        if c.transport == "reality":
-            entry = {"id": c.credential, "email": c.internal_tag or f"c{c.id}", "flow": c.flow or "xtls-rprx-vision"}
-            rc.append(entry)
-        elif c.transport == "ws":
-            wc.append(entry)
-        elif c.transport == "trojan-tls":
-            tt.append(entry)
-        elif c.transport == "trojan-ws":
-            tw.append(entry)
-    state.atomic_swap(state.build_config(rc, wc, tt, tw))
-    await xray.restart_xray()
-
-    # Persist ids into provisioned configs & subscription
     sub = await create_subscription(session, profile)
-    saved = (await session.execute(
-        select(VpnConfig).where(VpnConfig.profile_id == profile.id).order_by(VpnConfig.id)
-    )).scalars().all()
-    for pc, cfg in zip(provisioned, saved[:len(provisioned)]):
-        pc.db_id = cfg.id
 
     return ProvisionResult(
         profile_id=profile.id,
@@ -235,3 +221,27 @@ def sub_url(token: str) -> str:
     s = get_settings()
     base = s.subscription_base_url.rstrip("/") if s.subscription_base_url else f"http://{s.server_public_ip}:{s.sub_api_port}"
     return f"{base}/sub/{token}"
+
+
+async def _rebuild_xray(session, state: XrayState) -> None:
+    """Write xray config from every active config row and trigger a reload."""
+    all_cfgs = (await session.execute(
+        select(VpnConfig).where(VpnConfig.status == "active")
+    )).scalars().all()
+    rc, wc, tt, tw = [], [], [], []
+    for c in all_cfgs:
+        if c.protocol == "vless":
+            entry = {"id": c.credential, "email": c.internal_tag or f"c{c.id}"}
+            if c.transport == "reality":
+                entry["flow"] = c.flow or "xtls-rprx-vision"
+                rc.append(entry)
+            elif c.transport == "ws":
+                wc.append(entry)
+        elif c.protocol == "trojan":
+            entry = {"password": c.credential, "email": c.internal_tag or f"c{c.id}"}
+            if c.transport == "trojan-tls":
+                tt.append(entry)
+            elif c.transport == "trojan-ws":
+                tw.append(entry)
+    state.atomic_swap(state.build_config(rc, wc, tt, tw))
+    await xray.restart_xray()

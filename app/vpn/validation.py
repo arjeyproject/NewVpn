@@ -68,7 +68,7 @@ async def ws_check(host: str, port: int, path: str, host_header: str | None = No
     """TLS (if port is TLS) + HTTP Upgrade handshake against a WS endpoint.
     A 101 or a structured 400 from the server proves the transport answers."""
     start = time.perf_counter()
-    use_tls = port in (443, 2053, 2083, 2087, 2096, 8443)
+    use_tls = port in (443, 2053, 2083, 2087, 2096, 8443, 8444)
     try:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
